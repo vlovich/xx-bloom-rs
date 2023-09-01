@@ -254,7 +254,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::CountingBloomFilter;
-    use ASMS;
+    use crate::ASMS;
 
     #[test]
     fn simple() {

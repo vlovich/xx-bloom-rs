@@ -108,13 +108,13 @@ use std::hash::Hash;
 mod hashing;
 
 pub mod bloom;
-pub use bloom::{needed_bits, optimal_num_hashes, BloomFilter};
+pub use crate::bloom::{needed_bits, optimal_num_hashes, BloomFilter};
 
 pub mod counting;
-pub use counting::CountingBloomFilter;
+pub use crate::counting::CountingBloomFilter;
 
 pub mod valuevec;
-pub use valuevec::ValueVec;
+pub use crate::valuevec::ValueVec;
 
 /// Stanard filter functions
 pub trait ASMS {

@@ -158,7 +158,7 @@ impl ValueVec {
 
 #[cfg(test)]
 mod tests {
-    use valuevec::ValueVec;
+    use crate::valuevec::ValueVec;
 
     #[test]
     fn set_get_no_overlap() {

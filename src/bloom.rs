@@ -258,10 +258,10 @@ extern crate rand;
 mod bench {
     extern crate test;
     use self::test::Bencher;
-    use bloom::rand::{self, Rng};
+    use super::rand::{self, Rng};
 
     use super::BloomFilter;
-    use ASMS;
+    use crate::ASMS;
 
     #[bench]
     fn insert_benchmark(b: &mut Bencher) {
@@ -302,9 +302,9 @@ mod bench {
 #[cfg(test)]
 mod tests {
     use super::{needed_bits, optimal_num_hashes, BloomFilter};
-    use bloom::rand::{self, Rng};
+    use crate::bloom::rand::{self, Rng};
     use std::collections::{HashSet, hash_map::RandomState};
-    use {Intersectable, Unionable, ASMS};
+    use crate::{Intersectable, Unionable, ASMS};
 
     #[test]
     fn simple() {

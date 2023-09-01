@@ -1,13 +1,14 @@
 [package]
 name = "bloom"
-description = "Bloom filter implementation in rust"
+description = "Bloom filter implementation in rust using xxh3 for hashing"
 version = "0.3.1"
-authors = ["Nick Lanham <nick@afternight.org>"]
-homepage = "https://github.com/nicklan/bloom-rs"
+authors = ["Nick Lanham <nick@afternight.org>", "Vitali Lovich <vlovich@gmail.com>"]
+homepage = "https://github.com/vlovich/xx-bloom-rs"
 documentation = "https://docs.rs/bloom/"
 readme = "README.md"
 keywords = ["bloom", "filter", "bloomfilter"]
 license = "GPL-2.0"
+edition = "2021"
 
 [lib]
 name = "bloom"
