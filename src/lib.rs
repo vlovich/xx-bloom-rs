@@ -16,7 +16,6 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 // 02110-1301, USA.
 
-
 //! An implementation of various Approximate Set Membership structures
 //! in Rust.  Currently included are a standard Bloom Filter, and the
 //! simplest kind of Counting Bloom Filter.
@@ -98,20 +97,18 @@
 //! assert_eq!(cbf.estimate_count(&1),1);
 //! ```
 
-
-#![crate_name="bloom"]
+#![crate_name = "bloom"]
 #![crate_type = "rlib"]
-
 #![cfg_attr(feature = "do-bench", feature(test))]
 
-extern crate core;
 extern crate bit_vec;
+extern crate core;
 use std::hash::Hash;
 
 mod hashing;
 
 pub mod bloom;
-pub use bloom::{BloomFilter,optimal_num_hashes,needed_bits};
+pub use bloom::{needed_bits, optimal_num_hashes, BloomFilter};
 
 pub mod counting;
 pub use counting::CountingBloomFilter;
@@ -121,7 +118,7 @@ pub use valuevec::ValueVec;
 
 /// Stanard filter functions
 pub trait ASMS {
-    fn insert<T: Hash>(& mut self,item: &T) -> bool;
+    fn insert<T: Hash>(&mut self, item: &T) -> bool;
     fn contains<T: Hash>(&self, item: &T) -> bool;
     fn clear(&mut self);
 }

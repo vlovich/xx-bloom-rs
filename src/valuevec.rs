@@ -13,8 +13,8 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 // 02110-1301, USA.
 
-extern crate core;
 extern crate bit_vec;
+extern crate core;
 
 use bit_vec::BitVec;
 
@@ -27,15 +27,14 @@ pub struct ValueVec {
 }
 
 impl ValueVec {
-
     /// Create a ValueVec that holds values with `bits_per_val` bits and
     /// space to hold `count` values.
     pub fn new(bits_per_val: usize, count: usize) -> ValueVec {
-        let bits = bits_per_val*count;
+        let bits = bits_per_val * count;
         ValueVec {
             bits_per_val: bits_per_val,
-            mask: 2u32.pow(bits_per_val as u32)-1,
-            bits: BitVec::from_elem(bits,false),
+            mask: 2u32.pow(bits_per_val as u32) - 1,
+            bits: BitVec::from_elem(bits, false),
         }
     }
 
@@ -56,10 +55,10 @@ impl ValueVec {
         // there are fancy faster versions of this, but this is only
         // run in a constructor, so no need to complicate things
         while cur > 0 {
-            bits_per_val+=1;
-            cur>>=1;
+            bits_per_val += 1;
+            cur >>= 1;
         }
-        ValueVec::new(bits_per_val,count)
+        ValueVec::new(bits_per_val, count)
     }
 
     /// How many bits this ValueVec is using to store each value
@@ -77,34 +76,32 @@ impl ValueVec {
         self.bits.clear();
     }
 
-    fn set_bits(&mut self, idx: usize,  val: u32, num_bits: usize) {
-        let mut blocks = unsafe {self.bits.storage_mut()};
-        let blockidx = idx/32;
-        let shift = 32-(idx%32)-num_bits;
-        let mask =
-            if num_bits==self.bits_per_val {
-                self.mask
-            } else {
-                2u32.pow(num_bits as u32)-1
-            } << shift;
+    fn set_bits(&mut self, idx: usize, val: u32, num_bits: usize) {
+        let mut blocks = unsafe { self.bits.storage_mut() };
+        let blockidx = idx / 32;
+        let shift = 32 - (idx % 32) - num_bits;
+        let mask = if num_bits == self.bits_per_val {
+            self.mask
+        } else {
+            2u32.pow(num_bits as u32) - 1
+        } << shift;
         let block = blocks[blockidx];
 
         // this will be the value with all bits in our value set to zero
         let zeroed = (block ^ mask) & block;
         // or in the new val
-        blocks[blockidx] = zeroed | (val<<shift);
+        blocks[blockidx] = zeroed | (val << shift);
     }
 
     fn get_bits(&self, idx: usize, num_bits: usize) -> u32 {
         let blocks = self.bits.storage();
-        let shift = 32-(idx%32)-num_bits;
-        let mask =
-            if num_bits==self.bits_per_val {
-                self.mask
-            } else {
-                2u32.pow(num_bits as u32)-1
-            } << shift;
-        let val = blocks[idx/32] & mask;
+        let shift = 32 - (idx % 32) - num_bits;
+        let mask = if num_bits == self.bits_per_val {
+            self.mask
+        } else {
+            2u32.pow(num_bits as u32) - 1
+        } << shift;
+        let val = blocks[idx / 32] & mask;
         val >> shift
     }
 
@@ -121,38 +118,40 @@ impl ValueVec {
     /// bits this vec is using per value
     pub fn set(&mut self, i: usize, val: u32) {
         if val > self.mask {
-            panic!("set with val {}, max value this ValueVec can hold is {}",
-                   val,self.mask);
+            panic!(
+                "set with val {}, max value this ValueVec can hold is {}",
+                val, self.mask
+            );
         }
-        let idx = i*self.bits_per_val;
+        let idx = i * self.bits_per_val;
         //println!("idx is: {}",idx);
-        let rem = 32-(idx%32);
+        let rem = 32 - (idx % 32);
         if rem < self.bits_per_val {
             // rem is how many bits needed in the lower part
-            let left = self.bits_per_val-rem;
-            let lowerval = val>>left;
-            self.set_bits(idx,lowerval,rem);
+            let left = self.bits_per_val - rem;
+            let lowerval = val >> left;
+            self.set_bits(idx, lowerval, rem);
 
             // now put the rest of the bits in
-            let upval = val&(2u32.pow(left as u32)-1);
-            self.set_bits(idx+rem,upval,left);
+            let upval = val & (2u32.pow(left as u32) - 1);
+            self.set_bits(idx + rem, upval, left);
         } else {
             let vs = self.bits_per_val;
-            self.set_bits(idx,val,vs);
+            self.set_bits(idx, val, vs);
         }
     }
 
     /// Get the value in this ValueVec stored at index `i`
     pub fn get(&self, i: usize) -> u32 {
-        let idx = i*self.bits_per_val;
-        let rem = 32-(idx%32);
+        let idx = i * self.bits_per_val;
+        let rem = 32 - (idx % 32);
         if rem < self.bits_per_val {
-            let lower = self.get_bits(idx,rem);
-            let left = self.bits_per_val-rem;
-            let upper = self.get_bits(idx+rem,left);
-            (lower<<left)|upper
+            let lower = self.get_bits(idx, rem);
+            let left = self.bits_per_val - rem;
+            let upper = self.get_bits(idx + rem, left);
+            (lower << left) | upper
         } else {
-            self.get_bits(idx,self.bits_per_val)
+            self.get_bits(idx, self.bits_per_val)
         }
     }
 }
@@ -163,67 +162,67 @@ mod tests {
 
     #[test]
     fn set_get_no_overlap() {
-        let mut vv = ValueVec::new(4,12);
+        let mut vv = ValueVec::new(4, 12);
 
-        vv.set(1,3);
-        assert_eq!(vv.get(1),3);
+        vv.set(1, 3);
+        assert_eq!(vv.get(1), 3);
 
-        vv.set(2,4);
-        assert_eq!(vv.get(1),3);
-        assert_eq!(vv.get(2),4);
+        vv.set(2, 4);
+        assert_eq!(vv.get(1), 3);
+        assert_eq!(vv.get(2), 4);
 
-        vv.set(11,2);
-        assert_eq!(vv.get(1),3);
-        assert_eq!(vv.get(2),4);
-        assert_eq!(vv.get(11),2);
+        vv.set(11, 2);
+        assert_eq!(vv.get(1), 3);
+        assert_eq!(vv.get(2), 4);
+        assert_eq!(vv.get(11), 2);
     }
 
     #[test]
     fn set_get_overlap() {
-        let mut vv = ValueVec::new(3,12);
+        let mut vv = ValueVec::new(3, 12);
 
-        vv.set(1,3);
-        assert_eq!(vv.get(1),3);
+        vv.set(1, 3);
+        assert_eq!(vv.get(1), 3);
 
-        vv.set(2,4);
-        assert_eq!(vv.get(1),3);
-        assert_eq!(vv.get(2),4);
+        vv.set(2, 4);
+        assert_eq!(vv.get(1), 3);
+        assert_eq!(vv.get(2), 4);
 
-        vv.set(10,7);
-        assert_eq!(vv.get(1),3);
-        assert_eq!(vv.get(2),4);
-        assert_eq!(vv.get(10),7);
+        vv.set(10, 7);
+        assert_eq!(vv.get(1), 3);
+        assert_eq!(vv.get(2), 4);
+        assert_eq!(vv.get(10), 7);
 
-        vv.set(11,2);
-        assert_eq!(vv.get(1),3);
-        assert_eq!(vv.get(2),4);
-        assert_eq!(vv.get(10),7);
-        assert_eq!(vv.get(11),2);
+        vv.set(11, 2);
+        assert_eq!(vv.get(1), 3);
+        assert_eq!(vv.get(2), 4);
+        assert_eq!(vv.get(10), 7);
+        assert_eq!(vv.get(11), 2);
     }
 
     #[test]
     #[should_panic]
     fn set_over_max() {
-        let mut vv = ValueVec::new(2,2);
-        vv.set(0,100);
+        let mut vv = ValueVec::new(2, 2);
+        vv.set(0, 100);
     }
 
     #[test]
     fn with_max() {
-        let mut vv = ValueVec::with_max(35,3);
-        vv.set(0,35);
-        assert_eq!(vv.get(0),35);
-        vv.set(2,14);
-        assert_eq!(vv.get(0),35);
-        assert_eq!(vv.get(2),14);
-        assert_eq!(vv.get(1),0);
+        let mut vv = ValueVec::with_max(35, 3);
+        vv.set(0, 35);
+        assert_eq!(vv.get(0), 35);
+        vv.set(2, 14);
+        assert_eq!(vv.get(0), 35);
+        assert_eq!(vv.get(2), 14);
+        assert_eq!(vv.get(1), 0);
     }
 
     #[test]
     #[should_panic]
     fn over_with_max() {
-        let mut vv = ValueVec::with_max(7,2);
-        vv.set(0,7);
-        vv.set(1,8);
+        let mut vv = ValueVec::with_max(7, 2);
+        vv.set(0, 7);
+        vv.set(1, 8);
     }
 }

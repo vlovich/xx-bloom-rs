@@ -1,5 +1,4 @@
-
-use std::hash::{BuildHasher,Hash,Hasher};
+use std::hash::{BuildHasher, Hash, Hasher};
 // utilities for hashing
 
 pub struct HashIter {
@@ -17,20 +16,25 @@ impl Iterator for HashIter {
             return None;
         }
         let r = match self.i {
-            0 => { self.h1 }
-            1 => { self.h2 }
+            0 => self.h1,
+            1 => self.h2,
             _ => {
                 let p1 = self.h1.wrapping_add(self.i as u64);
                 p1.wrapping_mul(self.h2)
             }
         };
-        self.i+=1;
+        self.i += 1;
         Some(r)
     }
 }
 
 impl HashIter {
-    pub fn from<T: Hash, R: BuildHasher, S: BuildHasher>(item: T, count: u32, build_hasher_one:&R, build_hasher_two:&S) -> HashIter {
+    pub fn from<T: Hash, R: BuildHasher, S: BuildHasher>(
+        item: T,
+        count: u32,
+        build_hasher_one: &R,
+        build_hasher_two: &S,
+    ) -> HashIter {
         let mut hasher_one = build_hasher_one.build_hasher();
         let mut hasher_two = build_hasher_two.build_hasher();
         item.hash(&mut hasher_one);
