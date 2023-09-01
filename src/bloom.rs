@@ -303,7 +303,7 @@ mod bench {
 mod tests {
     use super::{needed_bits, optimal_num_hashes, BloomFilter};
     use bloom::rand::{self, Rng};
-    use std::collections::HashSet;
+    use std::collections::{HashSet, hash_map::RandomState};
     use {Intersectable, Unionable, ASMS};
 
     #[test]
@@ -318,10 +318,12 @@ mod tests {
 
     #[test]
     fn intersect() {
-        let mut b1: BloomFilter = BloomFilter::with_rate(0.01, 20);
+        let h1 = RandomState::new();
+        let h2 = RandomState::new();
+        let mut b1: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
         b1.insert(&1);
         b1.insert(&2);
-        let mut b2: BloomFilter = BloomFilter::with_rate(0.01, 20);
+        let mut b2: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1, h2);
         b2.insert(&1);
 
         b1.intersect(&b2);
@@ -332,9 +334,11 @@ mod tests {
 
     #[test]
     fn union() {
-        let mut b1: BloomFilter = BloomFilter::with_rate(0.01, 20);
+        let h1 = RandomState::new();
+        let h2 = RandomState::new();
+        let mut b1: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
         b1.insert(&1);
-        let mut b2: BloomFilter = BloomFilter::with_rate(0.01, 20);
+        let mut b2: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1, h2);
         b2.insert(&2);
 
         b1.union(&b2);
