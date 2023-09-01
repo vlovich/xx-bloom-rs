@@ -13,7 +13,7 @@ license = "GPL-2.0"
 name = "bloom"
 
 [dependencies]
-bit-vec = "0.4.3"
+bit-vec = "0.6.3"
 
 [dev-dependencies]
 rand = "0.3.14"
