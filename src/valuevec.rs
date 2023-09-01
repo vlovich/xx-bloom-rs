@@ -77,7 +77,7 @@ impl ValueVec {
     }
 
     fn set_bits(&mut self, idx: usize, val: u32, num_bits: usize) {
-        let mut blocks = unsafe { self.bits.storage_mut() };
+        let blocks = unsafe { self.bits.storage_mut() };
         let blockidx = idx / 32;
         let shift = 32 - (idx % 32) - num_bits;
         let mask = if num_bits == self.bits_per_val {
