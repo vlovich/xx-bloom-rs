@@ -251,60 +251,11 @@ pub fn needed_bits(false_pos_rate: f32, num_items: u32) -> usize {
 }
 
 #[cfg(test)]
-extern crate rand;
-
-#[cfg(feature = "do-bench")]
-#[cfg(test)]
-mod bench {
-    extern crate test;
-    use self::test::Bencher;
-    use super::rand::{self, Rng};
-
-    use super::BloomFilter;
-    use crate::ASMS;
-
-    #[bench]
-    fn insert_benchmark(b: &mut Bencher) {
-        let cnt = 500000;
-        let rate = 0.01 as f32;
-
-        let mut bf: BloomFilter = BloomFilter::with_rate(rate, cnt);
-        let mut rng = rand::thread_rng();
-
-        b.iter(|| {
-            let v = rng.gen::<i32>();
-            bf.insert(&v);
-        })
-    }
-
-    #[bench]
-    fn contains_benchmark(b: &mut Bencher) {
-        let cnt = 500000;
-        let rate = 0.01 as f32;
-
-        let mut bf: BloomFilter = BloomFilter::with_rate(rate, cnt);
-        let mut rng = rand::thread_rng();
-
-        let mut i = 0;
-        while i < cnt {
-            let v = rng.gen::<i32>();
-            bf.insert(&v);
-            i += 1;
-        }
-
-        b.iter(|| {
-            let v = rng.gen::<i32>();
-            bf.contains(&v);
-        })
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::{needed_bits, optimal_num_hashes, BloomFilter};
-    use crate::bloom::rand::{self, Rng};
-    use std::collections::{HashSet, hash_map::RandomState};
     use crate::{Intersectable, Unionable, ASMS};
+    use rand::{self, Rng};
+    use std::collections::{hash_map::RandomState, HashSet};
 
     #[test]
     fn simple() {
@@ -320,7 +271,8 @@ mod tests {
     fn intersect() {
         let h1 = RandomState::new();
         let h2 = RandomState::new();
-        let mut b1: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
+        let mut b1: BloomFilter =
+            BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
         b1.insert(&1);
         b1.insert(&2);
         let mut b2: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1, h2);
@@ -336,7 +288,8 @@ mod tests {
     fn union() {
         let h1 = RandomState::new();
         let h2 = RandomState::new();
-        let mut b1: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
+        let mut b1: BloomFilter =
+            BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
         b1.insert(&1);
         let mut b2: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1, h2);
         b2.insert(&2);

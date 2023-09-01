@@ -1,0 +1,69 @@
+use std::collections::hash_map::RandomState;
+
+use bloom::{BloomFilter, ASMS};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use rand::Rng;
+
+// Since no way to get this value cross-platform, manually set it to larger than reasonable.
+// Most tests just reuse the same slice over and over again, but that's not representative of
+// realistic workloads where the slice fed into the filter is in a different memory location
+// each time.
+const GUARANTEED_LARGER_THAN_CACHE: usize = 512 * 1024 * 1024;
+
+#[inline(always)]
+fn get_random_key<'a>(large_buffer: &'a [u8], offset: &mut usize, size: usize) -> &'a [u8] {
+    let key: &[u8] = unsafe { large_buffer.get_unchecked(*offset..*offset + size) };
+    *offset = (*offset + size) % GUARANTEED_LARGER_THAN_CACHE;
+    key
+}
+
+fn benchmark(c: &mut Criterion) {
+    let mut rng = rand::thread_rng();
+
+    let key_buffer = Vec::from_iter(
+        std::iter::from_fn(|| Some(rng.gen::<u8>())).take(GUARANTEED_LARGER_THAN_CACHE),
+    );
+
+    {
+        let mut group = c.benchmark_group("Insertion");
+        let num_keys = 1_000_000;
+        for key_size in [5, 7, 17, 31, 47, 97, 127, 257, 521] {
+            group.throughput(criterion::Throughput::Bytes(key_size.try_into().unwrap()));
+            group.bench_with_input(
+                BenchmarkId::new("std::collections::hash_map::RandomState", key_size),
+                &num_keys,
+                |b, _| {
+                    let mut offset = 0;
+                    let mut filter = BloomFilter::with_rate_and_hashers(0.01, num_keys + 300_000, RandomState::new(), RandomState::new());
+                    b.iter(|| {
+                        let key = get_random_key(&key_buffer, &mut offset, key_size);
+                        filter.insert(&key);
+                    })
+                },
+            );
+        }
+    }
+
+    {
+        let mut group: criterion::BenchmarkGroup<'_, criterion::measurement::WallTime> = c.benchmark_group("Contains");
+        let num_keys = 1_000_000;
+        for key_size in [5, 7, 17, 31, 47, 97, 127, 257, 521] {
+            group.throughput(criterion::Throughput::Bytes(key_size.try_into().unwrap()));
+            group.bench_with_input(
+                BenchmarkId::new("std::collections::hash_map::RandomState", key_size),
+                &num_keys,
+                |b, _| {
+                    let mut offset = 0;
+                    let mut filter = BloomFilter::with_rate_and_hashers(0.01, num_keys + 300_000, RandomState::new(), RandomState::new());
+                    b.iter(|| {
+                        let key = get_random_key(&key_buffer, &mut offset, key_size);
+                        filter.insert(&key);
+                    })
+                },
+            );
+        }
+    }
+}
+
+criterion_group!(benches, benchmark);
+criterion_main!(benches);
