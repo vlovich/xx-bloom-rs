@@ -1,5 +1,5 @@
 [package]
-name = "bloom"
+name = "xx-bloom"
 description = "Bloom filter implementation in rust using xxh3 for hashing"
 version = "0.3.1"
 authors = ["Nick Lanham <nick@afternight.org>", "Vitali Lovich <vlovich@gmail.com>"]
@@ -15,10 +15,12 @@ name = "bloom"
 harness = false
 
 [lib]
-name = "bloom"
+name = "xx_bloom"
 
 [dependencies]
 bit-vec = "0.6.3"
+getrandom = "0.2.10"
+xxhash-rust = { version = "0.8.6", default-features = false, features = ["xxh3"] }
 
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }

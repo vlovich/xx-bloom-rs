@@ -1,3 +1,11 @@
+# xx-bloom
+Inherits from bloom but:
+* Switches codebase to 2021 edition
+* Switches default algorithm to xxh3
+* Fixes internal intersection / union tests that were broken
+* Expose `combinable_with` constructor to make it easier to create a combinable BloomFilter.
+* TODO: Make the filter serializable.
+
 # bloom
 
 An implementation of various Approximate Set Membership structures in

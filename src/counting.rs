@@ -55,7 +55,7 @@ impl CountingBloomFilter<RandomState, RandomState> {
     /// # Example
     ///
     /// ```rust
-    /// use bloom::CountingBloomFilter;
+    /// use xx_bloom::CountingBloomFilter;
     /// // Create a CountingBloomFilter that can count up to 10 on each entry, and with 1000
     /// // items will have a false positive rate of 0.01
     /// let cfb = CountingBloomFilter::with_rate(CountingBloomFilter::bits_for_max(10),

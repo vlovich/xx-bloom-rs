@@ -15,11 +15,13 @@
 
 extern crate bit_vec;
 extern crate core;
+extern crate xxhash_rust;
 
 use bit_vec::BitVec;
 use std::cmp::{max, min};
-use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hash};
+
+use crate::xxh_helper::RandomXxh3State;
 
 use super::hashing::HashIter;
 use super::{Intersectable, Unionable, ASMS};
@@ -39,7 +41,7 @@ use super::{Intersectable, Unionable, ASMS};
 /// # Example Usage
 ///
 /// ```rust
-/// use bloom::{ASMS,BloomFilter};
+/// use xx_bloom::{ASMS,BloomFilter};
 ///
 /// let expected_num_items = 1000;
 ///
@@ -51,31 +53,57 @@ use super::{Intersectable, Unionable, ASMS};
 /// filter.contains(&1); /* true */
 /// filter.contains(&2); /* false */
 /// ```
-pub struct BloomFilter<R = RandomState, S = RandomState> {
+pub struct BloomFilter<R = RandomXxh3State, S = RandomXxh3State> {
     bits: BitVec,
     num_hashes: u32,
     hash_builder_one: R,
     hash_builder_two: S,
 }
 
-impl BloomFilter<RandomState, RandomState> {
+impl BloomFilter<RandomXxh3State, RandomXxh3State> {
     /// Create a new BloomFilter with the specified number of bits,
     /// and hashes
-    pub fn with_size(num_bits: usize, num_hashes: u32) -> BloomFilter<RandomState, RandomState> {
+    pub fn with_size(
+        num_bits: usize,
+        num_hashes: u32,
+    ) -> BloomFilter<RandomXxh3State, RandomXxh3State> {
         BloomFilter {
             bits: BitVec::from_elem(num_bits, false),
             num_hashes: num_hashes,
-            hash_builder_one: RandomState::new(),
-            hash_builder_two: RandomState::new(),
+            hash_builder_one: RandomXxh3State::new(),
+            hash_builder_two: RandomXxh3State::new(),
         }
     }
 
     /// create a BloomFilter that expects to hold
     /// `expected_num_items`.  The filter will be sized to have a
     /// false positive rate of the value specified in `rate`.
-    pub fn with_rate(rate: f32, expected_num_items: u32) -> BloomFilter<RandomState, RandomState> {
+    pub fn with_rate(
+        rate: f32,
+        expected_num_items: u32,
+    ) -> BloomFilter<RandomXxh3State, RandomXxh3State> {
         let bits = needed_bits(rate, expected_num_items);
         BloomFilter::with_size(bits, optimal_num_hashes(bits, expected_num_items))
+    }
+}
+
+impl<R, S> BloomFilter<R, S>
+where
+    R: Clone,
+    S: Clone,
+{
+    /// Create a new BloomFilter with the exact same parameters as the other.
+    /// These two filters can be safely intersected and unioned with one another.
+    /// Otherwise you have to be careful that not only the number of bits and number of hashes
+    /// is the same, but also that the hash algorithms used have the same parameters (the default
+    /// hash functions use random state).
+    pub fn combinable_with(other: &BloomFilter<R, S>) -> Self {
+        BloomFilter {
+            bits: BitVec::from_elem(other.bits.len(), false),
+            num_hashes: other.num_hashes,
+            hash_builder_one: other.hash_builder_one.clone(),
+            hash_builder_two: other.hash_builder_two.clone(),
+        }
     }
 }
 
@@ -252,9 +280,10 @@ pub fn needed_bits(false_pos_rate: f32, num_items: u32) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use rand::Rng;
+
     use super::{needed_bits, optimal_num_hashes, BloomFilter};
     use crate::{Intersectable, Unionable, ASMS};
-    use rand::{self, Rng};
     use std::collections::{hash_map::RandomState, HashSet};
 
     #[test]
@@ -271,11 +300,11 @@ mod tests {
     fn intersect() {
         let h1 = RandomState::new();
         let h2 = RandomState::new();
-        let mut b1: BloomFilter =
+        let mut b1 =
             BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
         b1.insert(&1);
         b1.insert(&2);
-        let mut b2: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1, h2);
+        let mut b2 = BloomFilter::combinable_with(&b1);
         b2.insert(&1);
 
         b1.intersect(&b2);
@@ -288,10 +317,10 @@ mod tests {
     fn union() {
         let h1 = RandomState::new();
         let h2 = RandomState::new();
-        let mut b1: BloomFilter =
+        let mut b1 =
             BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
         b1.insert(&1);
-        let mut b2: BloomFilter = BloomFilter::with_rate_and_hashers(0.01, 20, h1, h2);
+        let mut b2 = BloomFilter::combinable_with(&b1);
         b2.insert(&2);
 
         b1.union(&b2);

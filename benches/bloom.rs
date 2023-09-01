@@ -41,6 +41,18 @@ fn benchmark(c: &mut Criterion) {
                     })
                 },
             );
+            group.bench_with_input(
+                BenchmarkId::new("xxh3", key_size),
+                &num_keys,
+                |b, _| {
+                    let mut offset = 0;
+                    let mut filter = BloomFilter::with_rate(0.01, num_keys + 300_000);
+                    b.iter(|| {
+                        let key = get_random_key(&key_buffer, &mut offset, key_size);
+                        filter.insert(&key);
+                    })
+                },
+            );
         }
     }
 
@@ -57,7 +69,19 @@ fn benchmark(c: &mut Criterion) {
                     let mut filter = BloomFilter::with_rate_and_hashers(0.01, num_keys + 300_000, RandomState::new(), RandomState::new());
                     b.iter(|| {
                         let key = get_random_key(&key_buffer, &mut offset, key_size);
-                        filter.insert(&key);
+                        filter.contains(&key);
+                    })
+                },
+            );
+            group.bench_with_input(
+                BenchmarkId::new("xxh3", key_size),
+                &num_keys,
+                |b, _| {
+                    let mut offset = 0;
+                    let mut filter = BloomFilter::with_rate(0.01, num_keys + 300_000);
+                    b.iter(|| {
+                        let key = get_random_key(&key_buffer, &mut offset, key_size);
+                        filter.contains(&key);
                     })
                 },
             );

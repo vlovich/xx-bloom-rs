@@ -44,7 +44,7 @@ impl ValueVec {
     /// # Example
     ///
     /// ```rust,should_panic
-    /// use bloom::ValueVec;
+    /// use xx_bloom::ValueVec;
     /// let mut vv = ValueVec::with_max(7,3);
     /// vv.set(0,7); // okay
     /// vv.set(0,8); // will panic

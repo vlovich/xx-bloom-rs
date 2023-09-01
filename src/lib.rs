@@ -28,13 +28,13 @@
 //!
 //! ```toml
 //! [dependencies]
-//! bloom = "0.2.0"
+//! xx-bloom = "0.4.0"
 //! ```
 //!
 //! add this to your crate root:
 //!
 //! ```rust
-//! extern crate bloom;
+//! extern crate xx_bloom;
 //! ```
 //!
 //! # Bloom Filters
@@ -56,7 +56,7 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use bloom::{ASMS,BloomFilter};
+//! use xx_bloom::{ASMS,BloomFilter};
 //!
 //! let expected_num_items = 1000;
 //!
@@ -83,7 +83,7 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use bloom::{ASMS,CountingBloomFilter};
+//! use xx_bloom::{ASMS,CountingBloomFilter};
 //! // Create a counting filter that uses 4 bits per element and has a false positive rate
 //! // of 0.01 when 100 items have been inserted
 //! let mut cbf:CountingBloomFilter = CountingBloomFilter::with_rate(4,0.01,100);
@@ -97,7 +97,7 @@
 //! assert_eq!(cbf.estimate_count(&1),1);
 //! ```
 
-#![crate_name = "bloom"]
+#![crate_name = "xx_bloom"]
 #![crate_type = "rlib"]
 #![cfg_attr(feature = "do-bench", feature(test))]
 
@@ -106,6 +106,7 @@ extern crate core;
 use std::hash::Hash;
 
 mod hashing;
+mod xxh_helper;
 
 pub mod bloom;
 pub use crate::bloom::{needed_bits, optimal_num_hashes, BloomFilter};
