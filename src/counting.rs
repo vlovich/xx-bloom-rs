@@ -1,5 +1,6 @@
 use crate::xxh_helper::RandomXxh3State;
 use crate::BloomBuildHasher;
+use crate::BloomFingerprint;
 
 use super::hashing::HashIter;
 use super::ValueVec;
@@ -121,15 +122,12 @@ where
         )
     }
 
-    /// Remove an item.  Returns an upper bound of the number of times
-    /// this item had been inserted previously (i.e. the count before
-    /// this remove).  Returns 0 if item was never inserted.
-    pub fn remove<T: Hash>(&mut self, item: &T) -> u32 {
-        if !(self as &CountingBloomFilter<H>).contains(item) {
+    fn remove_hash_iter(&mut self, h_iter: HashIter) -> u32 {
+        if !(self as &CountingBloomFilter<H>).contains_hash_iter(h_iter) {
             return 0;
         }
         let mut min = u32::max_value();
-        for h in HashIter::from(item, self.num_hashes, &self.hash_builder) {
+        for h in h_iter {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur < min {
@@ -143,14 +141,41 @@ where
         }
         min
     }
+    /// Remove an item.  Returns an upper bound of the number of times
+    /// this item had been inserted previously (i.e. the count before
+    /// this remove).  Returns 0 if item was never inserted.
+    #[inline(always)]
+    pub fn remove<T: Hash>(&mut self, item: &T) -> u32 {
+        self.remove_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
+    }
 
-    /// Return an estimate of the number of times `item` has been
-    /// inserted into the filter.  Esitimate is a upper bound on the
-    /// count, meaning the item has been inserted *at most* this many
-    /// times, but possibly fewer.
-    pub fn estimate_count<T: Hash>(&self, item: &T) -> u32 {
+    /// Remove an item.  Returns an upper bound of the number of times
+    /// this item had been inserted previously (i.e. the count before
+    /// this remove).  Returns 0 if item was never inserted.
+    /// This is a fast path when the items you're dealing with are byte slices.
+    #[inline(always)]
+    pub fn remove_slice(&mut self, item: &[u8]) -> u32 {
+        self.remove_hash_iter(HashIter::from_slice(
+            item,
+            self.num_hashes,
+            &self.hash_builder,
+        ))
+    }
+
+    /// Remove an item.  Returns an upper bound of the number of times
+    /// this item had been inserted previously (i.e. the count before
+    /// this remove).  Returns 0 if item was never inserted.
+    /// This is a fast path when you have a set of filters that share the same
+    /// BloomBuildHasher where you can amortize the key hash across all your
+    /// filters.
+    #[inline(always)]
+    pub fn remove_fingerprint(&mut self, fingerprint: BloomFingerprint) -> u32 {
+        self.remove_hash_iter(HashIter::from_fingerprint(fingerprint, self.num_hashes))
+    }
+
+    fn estimate_count_hash_iter(&self, h_iter: HashIter) -> u32 {
         let mut min = u32::max_value();
-        for h in HashIter::from(item, self.num_hashes, &self.hash_builder) {
+        for h in h_iter {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur < min {
@@ -160,12 +185,39 @@ where
         min
     }
 
-    /// Inserts an item, returns the estimated count of the number of
-    /// times this item had previously been inserted (not counting
-    /// this insertion)
-    pub fn insert_get_count<T: Hash>(&mut self, item: &T) -> u32 {
+    /// Return an estimate of the number of times `item` has been
+    /// inserted into the filter.  Estimate is a upper bound on the
+    /// count, meaning the item has been inserted *at most* this many
+    /// times, but possibly fewer.
+    #[inline(always)]
+    pub fn estimate_count<T: Hash>(&self, item: &T) -> u32 {
+        self.estimate_count_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
+    }
+
+    /// Return an estimate of the number of times `item` has been
+    /// inserted into the filter.  Estimate is a upper bound on the
+    /// count, meaning the item has been inserted *at most* this many
+    /// times, but possibly fewer.
+    /// This is a fast-path for when your item is a byte slice.
+    #[inline(always)]
+    pub fn estimate_count_slice(&self, item: &[u8]) -> u32 {
+        self.estimate_count_hash_iter(HashIter::from_slice(item, self.num_hashes, &self.hash_builder))
+    }
+
+    /// Return an estimate of the number of times `item` has been
+    /// inserted into the filter.  Estimate is a upper bound on the
+    /// count, meaning the item has been inserted *at most* this many
+    /// times, but possibly fewer.
+    /// This is a fast-path for when you want to amortize the lookup
+    /// across multiple filters sharing the same hash algorithm.
+    #[inline(always)]
+    pub fn estimate_count_fingerprint(&self, fp: BloomFingerprint) -> u32 {
+        self.estimate_count_hash_iter(HashIter::from_fingerprint(fp, self.num_hashes))
+    }
+
+    fn insert_get_count_hash_iter(&mut self, h_iter: HashIter) -> u32 {
         let mut min = u32::max_value();
-        for h in HashIter::from(item, self.num_hashes, &self.hash_builder) {
+        for h in h_iter {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur < min {
@@ -176,6 +228,33 @@ where
             }
         }
         min
+    }
+
+    /// Inserts an item, returns the estimated count of the number of
+    /// times this item had previously been inserted (not counting
+    /// this insertion)
+    #[inline(always)]
+    pub fn insert_get_count<T: Hash>(&mut self, item: &T) -> u32 {
+        self.insert_get_count_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
+    }
+
+    /// Inserts an item, returns the estimated count of the number of
+    /// times this item had previously been inserted (not counting
+    /// this insertion).
+    /// This is a fast-path for when the item is a byte slice.
+    #[inline(always)]
+    pub fn insert_get_count_slice(&mut self, item: &[u8]) -> u32 {
+        self.insert_get_count_hash_iter(HashIter::from_slice(item, self.num_hashes, &self.hash_builder))
+    }
+
+    /// Inserts an item, returns the estimated count of the number of
+    /// times this item had previously been inserted (not counting
+    /// this insertion)
+    /// This is a fast-path that lets you want to amortize this across
+    /// multiple filters sharing the same hash algorithm.
+    #[inline(always)]
+    pub fn insert_get_count_fingerprint(&mut self, fp: BloomFingerprint) -> u32 {
+        self.insert_get_count_hash_iter(HashIter::from_fingerprint(fp, self.num_hashes))
     }
 
     fn insert_hash_iter(&mut self, h_iter: HashIter) -> bool {
@@ -225,6 +304,11 @@ where
         ))
     }
 
+    #[inline(always)]
+    fn insert_fingerprint(&mut self, fingerprint: crate::BloomFingerprint) -> bool {
+        self.insert_hash_iter(HashIter::from_fingerprint(fingerprint, self.num_hashes))
+    }
+
     /// Check if the item has been inserted into this
     /// CountingBloomFilter.  This function can return false
     /// positives, but not false negatives.
@@ -233,6 +317,7 @@ where
         self.contains_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
     }
 
+    #[inline(always)]
     fn contains_slice(&self, item: &[u8]) -> bool {
         // TODO: optimize
         self.contains_hash_iter(HashIter::from_slice(
@@ -240,6 +325,11 @@ where
             self.num_hashes,
             &self.hash_builder,
         ))
+    }
+
+    #[inline(always)]
+    fn contains_fingerprint(&self, fingerprint: crate::BloomFingerprint) -> bool {
+        self.contains_hash_iter(HashIter::from_fingerprint(fingerprint, self.num_hashes))
     }
 
     /// Remove all values from this CountingBloomFilter

@@ -1,8 +1,8 @@
-use std::collections::hash_map::RandomState;
+use std::{collections::hash_map::RandomState, hint::black_box};
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::Rng;
-use xx_bloom::{BloomFilter, BuildHasher128Adapter, ASMS};
+use xx_bloom::{BloomFilter, BuildHasher128Adapter, ASMS, RandomXxh3State, BloomBuildHasher};
 
 // Since no way to get this value cross-platform, manually set it to larger than reasonable.
 // Most tests just reuse the same slice over and over again, but that's not representative of
@@ -31,7 +31,7 @@ fn benchmark(c: &mut Criterion) {
             group.throughput(criterion::Throughput::Bytes(key_size.try_into().unwrap()));
             group.bench_with_input(
                 BenchmarkId::new("std::collections::hash_map::RandomState", key_size),
-                &num_keys,
+                &key_size,
                 |b, _| {
                     let mut offset = 0;
                     let mut filter = BloomFilter::with_rate_and_hasher(
@@ -41,17 +41,17 @@ fn benchmark(c: &mut Criterion) {
                     );
                     b.iter(|| {
                         let key = get_random_key(&key_buffer, &mut offset, key_size);
-                        filter.insert(&key);
-                    })
+                        black_box(filter.insert(&key));
+                    });
                 },
             );
-            group.bench_with_input(BenchmarkId::new("xxh3", key_size), &num_keys, |b, _| {
+            group.bench_with_input(BenchmarkId::new("xxh3", key_size), &key_size, |b, _| {
                 let mut offset = 0;
                 let mut filter = BloomFilter::with_rate(0.01, num_keys + 300_000);
                 b.iter(|| {
                     let key = get_random_key(&key_buffer, &mut offset, key_size);
-                    filter.insert_slice(&key);
-                })
+                    black_box(filter.insert_slice(&key));
+                });
             });
         }
     }
@@ -64,7 +64,7 @@ fn benchmark(c: &mut Criterion) {
             group.throughput(criterion::Throughput::Bytes(key_size.try_into().unwrap()));
             group.bench_with_input(
                 BenchmarkId::new("std::collections::hash_map::RandomState", key_size),
-                &num_keys,
+                &key_size,
                 |b, _| {
                     let mut offset = 0;
                     let mut filter = BloomFilter::with_rate_and_hasher(
@@ -74,17 +74,62 @@ fn benchmark(c: &mut Criterion) {
                     );
                     b.iter(|| {
                         let key = get_random_key(&key_buffer, &mut offset, key_size);
-                        filter.contains(&key);
-                    })
+                        black_box(filter.contains(&key));
+                    });
                 },
             );
-            group.bench_with_input(BenchmarkId::new("xxh3", key_size), &num_keys, |b, _| {
+            group.bench_with_input(BenchmarkId::new("xxh3", key_size), &key_size, |b, _| {
                 let mut offset = 0;
                 let mut filter = BloomFilter::with_rate(0.01, num_keys + 300_000);
                 b.iter(|| {
                     let key = get_random_key(&key_buffer, &mut offset, key_size);
-                    filter.contains_slice(&key);
-                })
+                    black_box(filter.contains_slice(&key));
+                });
+            });
+        }
+    }
+
+    {
+        let num_keys = 1_000_000;
+
+        let mut group: criterion::BenchmarkGroup<'_, criterion::measurement::WallTime> =
+            c.benchmark_group("Containership of 10 filters");
+        for key_size in [5, 7, 17, 31, 47, 97, 127, 257, 521] {
+            group.throughput(criterion::Throughput::Bytes(key_size.try_into().unwrap()));
+            group.bench_with_input(
+                BenchmarkId::new("naiive", key_size),
+                &key_size,
+                |b, _| {
+                    let mut offset = 0;
+                    let builder = RandomXxh3State::new();
+                    let mut filters: Vec<BloomFilter> = (0..10).map(|_| BloomFilter::with_rate_and_hasher(
+                        0.01,
+                        num_keys + 300_000,
+                        builder,
+                    )).collect();
+                    b.iter(|| {
+                        let key = get_random_key(&key_buffer, &mut offset, key_size);
+                        for filter in &filters {
+                            black_box(filter.contains_slice(&key));
+                        }
+                    });
+                },
+            );
+            group.bench_with_input(BenchmarkId::new("fingerprint", key_size), &key_size, |b, _| {
+                let mut offset = 0;
+                let builder = RandomXxh3State::new();
+                let mut filters: Vec<BloomFilter> = (0..10).map(|_| BloomFilter::with_rate_and_hasher(
+                    0.01,
+                    num_keys + 300_000,
+                    builder,
+                )).collect();
+                b.iter(|| {
+                    let key = get_random_key(&key_buffer, &mut offset, key_size);
+                    let fp = builder.hash_one_128(key);
+                    for filter in &filters {
+                        black_box(filter.contains_fingerprint(fp));
+                    }
+                });
             });
         }
     }

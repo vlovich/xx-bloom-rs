@@ -120,10 +120,32 @@ pub use crate::valuevec::ValueVec;
 pub use std_hasher::*;
 pub use xxh_helper::*;
 
+/// This is an opaque container of the raw underlying information for a key.
+/// If you have a bunch of filters with the exact BloomBuildHasher being used,
+/// then you can quickly check the fingerprint in all of them without needing to
+/// rehash your key constantly.
+#[derive(Copy, Clone)]
+pub struct BloomFingerprint {
+    pub(crate) h1: u64,
+    pub(crate) h2: u64,
+}
+
+impl BloomFingerprint {
+    #[inline(always)]
+    pub fn new(h1: u64, h2: u64) -> Self {
+        Self { h1, h2 }
+    }
+
+    #[inline(always)]
+    pub fn new_128(h: u128) -> Self {
+        Self::new((h >> 64) as u64, h as u64)
+    }
+}
+
 /// Extends Hasher so that we can get the full underlying 128-bit digest if
 /// it's implemented natively as such.
 pub trait BloomHasher: Hasher {
-    fn finish_128(&self) -> (u64, u64);
+    fn finish_128(&self) -> BloomFingerprint;
 }
 
 /// Like BuildHasher, except bloom filters use 128-bit hashes which can be more efficiently
@@ -132,15 +154,17 @@ pub trait BloomBuildHasher: Clone {
     type Hasher: BloomHasher;
 
     fn build_hasher(&self) -> Self::Hasher;
-    fn hash_one_128(&self, k: &[u8]) -> (u64, u64);
+    fn hash_one_128(&self, k: &[u8]) -> BloomFingerprint;
 }
 
 /// Stanard filter functions
 pub trait ASMS {
     fn insert<T: Hash>(&mut self, item: &T) -> bool;
     fn insert_slice(&mut self, item: &[u8]) -> bool;
+    fn insert_fingerprint(&mut self, fingerprint: BloomFingerprint) -> bool;
     fn contains<T: Hash>(&self, item: &T) -> bool;
     fn contains_slice(&self, item: &[u8]) -> bool;
+    fn contains_fingerprint(&self, fingerprint: BloomFingerprint) -> bool;
     fn clear(&mut self);
 }
 

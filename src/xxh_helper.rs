@@ -2,14 +2,13 @@ use std::mem::MaybeUninit;
 
 use xxhash_rust::xxh3::{Xxh3, Xxh3Builder};
 
-use crate::{BloomBuildHasher, BloomHasher};
+use crate::{BloomBuildHasher, BloomFingerprint, BloomHasher};
 
 const DEFAULT_SECRET_SIZE: usize = 192;
 
 impl BloomHasher for Xxh3 {
-    fn finish_128(&self) -> (u64, u64) {
-        let combined = self.digest128();
-        ((combined >> 64) as u64, combined as u64)
+    fn finish_128(&self) -> BloomFingerprint {
+        BloomFingerprint::new_128(self.digest128())
     }
 }
 
@@ -71,9 +70,9 @@ impl BloomBuildHasher for RandomXxh3State {
     }
 
     #[inline(always)]
-    fn hash_one_128(&self, k: &[u8]) -> (u64, u64) {
+    fn hash_one_128(&self, k: &[u8]) -> BloomFingerprint {
         let h = xxhash_rust::xxh3::xxh3_128_with_secret(k, &self.secret);
-        ((h >> 64) as u64, h as u64)
+        BloomFingerprint::new_128(h)
     }
 }
 
@@ -103,8 +102,8 @@ impl BloomBuildHasher for SecretBasedXxh3Builder {
     }
 
     #[inline(always)]
-    fn hash_one_128(&self, k: &[u8]) -> (u64, u64) {
+    fn hash_one_128(&self, k: &[u8]) -> BloomFingerprint {
         let h = xxhash_rust::xxh3::xxh3_128_with_secret(k, &self.secret);
-        ((h >> 64) as u64, h as u64)
+        BloomFingerprint::new_128(h)
     }
 }

@@ -3,7 +3,7 @@ use std::{
     hash::{BuildHasher, Hasher},
 };
 
-use crate::{BloomBuildHasher, BloomHasher};
+use crate::{BloomBuildHasher, BloomFingerprint, BloomHasher};
 
 pub struct Hasher128Adapter<R, S>
 where
@@ -20,7 +20,7 @@ where
     S: Hasher,
 {
     fn finish(&self) -> u64 {
-        unimplemented!("finish cannot be called on a BloomHasher");
+        unimplemented!("64-finish cannot be called on a BloomHasher. Use finish_128");
     }
 
     #[inline]
@@ -108,8 +108,8 @@ where
     S: Hasher,
 {
     #[inline]
-    fn finish_128(&self) -> (u64, u64) {
-        (self.h1.finish(), self.h2.finish())
+    fn finish_128(&self) -> BloomFingerprint {
+        BloomFingerprint::new(self.h1.finish(), self.h2.finish())
     }
 }
 
@@ -162,7 +162,7 @@ where
     }
 
     #[inline(always)]
-    fn hash_one_128(&self, k: &[u8]) -> (u64, u64) {
-        (self.h1.hash_one(k), self.h2.hash_one(k))
+    fn hash_one_128(&self, k: &[u8]) -> BloomFingerprint {
+        BloomFingerprint::new(self.h1.hash_one(k), self.h2.hash_one(k))
     }
 }

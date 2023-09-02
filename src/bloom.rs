@@ -201,15 +201,56 @@ where
     /// If the BloomFilter did not have this value present, `true` is returned.
     ///
     /// If the BloomFilter did have this value present, `false` is returned.
-    #[inline]
+    #[inline(always)]
     fn insert<T: Hash>(&mut self, item: &T) -> bool {
         self.insert_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
     }
 
-    /// Like `insert` but more optimized path.
-    #[inline]
+    /// Insert item into this BloomFilter.
+    ///
+    /// If the BloomFilter did not have this value present, `true` is returned.
+    ///
+    /// If the BloomFilter did have this value present, `false` is returned.
+    /// 
+    /// This is a faster-path if the item you're inserting is a byte slice.
+    #[inline(always)]
     fn insert_slice(&mut self, item: &[u8]) -> bool {
         self.insert_hash_iter(HashIter::from_slice(
+            item,
+            self.num_hashes,
+            &self.hash_builder,
+        ))
+    }
+
+    /// Insert a fingerprint into this BloomFilter.
+    ///
+    /// If the BloomFilter did not have this value present, `true` is returned.
+    ///
+    /// If the BloomFilter did have this value present, `false` is returned.
+    /// 
+    /// This is a faster-path if you have multiple filters that share the same
+    /// hash algorithm that you're inserting into. This will let you amortize
+    /// the cost of the hash.
+    #[inline(always)]
+    fn insert_fingerprint(&mut self, fingerprint: crate::BloomFingerprint) -> bool {
+        self.insert_hash_iter(HashIter::from_fingerprint(fingerprint, self.num_hashes))
+    }
+
+    /// Check if the item has been inserted into this bloom filter.
+    /// This function can return false positives, but not false
+    /// negatives.
+    #[inline(always)]
+    fn contains<T: Hash>(&self, item: &T) -> bool {
+        self.contains_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
+    }
+
+    /// Check if the item has been inserted into this bloom filter.
+    /// This function can return false positives, but not false
+    /// negatives.
+    /// This is a faster-path if the item you're inserting is a byte slice.
+    #[inline(always)]
+    fn contains_slice(&self, item: &[u8]) -> bool {
+        self.contains_hash_iter(HashIter::from_slice(
             item,
             self.num_hashes,
             &self.hash_builder,
@@ -219,22 +260,16 @@ where
     /// Check if the item has been inserted into this bloom filter.
     /// This function can return false positives, but not false
     /// negatives.
-    #[inline]
-    fn contains<T: Hash>(&self, item: &T) -> bool {
-        self.contains_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
-    }
-
-    #[inline]
-    fn contains_slice(&self, item: &[u8]) -> bool {
-        self.contains_hash_iter(HashIter::from_slice(
-            item,
-            self.num_hashes,
-            &self.hash_builder,
-        ))
+    /// This is a faster-path if you have multiple filters that share the same
+    /// hash algorithm that you're checking containership for. This will let you amortize
+    /// the cost of the hash.
+    #[inline(always)]
+    fn contains_fingerprint(&self, fingerprint: crate::BloomFingerprint) -> bool {
+        self.contains_hash_iter(HashIter::from_fingerprint(fingerprint, self.num_hashes))
     }
 
     /// Remove all values from this BloomFilter
-    #[inline]
+    #[inline(always)]
     fn clear(&mut self) {
         self.bits.clear();
     }
