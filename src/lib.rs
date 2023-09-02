@@ -159,9 +159,9 @@ pub trait BloomBuildHasher: Clone {
 
 /// Stanard filter functions
 pub trait ASMS {
-    fn insert<T: Hash>(&mut self, item: &T) -> bool;
-    fn insert_slice(&mut self, item: &[u8]) -> bool;
-    fn insert_fingerprint(&mut self, fingerprint: BloomFingerprint) -> bool;
+    fn insert<T: Hash>(&mut self, item: &T);
+    fn insert_slice(&mut self, item: &[u8]);
+    fn insert_fingerprint(&mut self, fingerprint: BloomFingerprint);
     fn contains<T: Hash>(&self, item: &T) -> bool;
     fn contains_slice(&self, item: &[u8]) -> bool;
     fn contains_fingerprint(&self, fingerprint: BloomFingerprint) -> bool;

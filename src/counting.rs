@@ -244,15 +244,14 @@ where
         self.insert_get_count_hash_iter(HashIter::from_fingerprint(fp, self.num_hashes))
     }
 
-    fn insert_hash_iter(&mut self, h_iter: HashIter) -> bool {
-        h_iter.map(|h| {
+    fn insert_hash_iter(&mut self, h_iter: HashIter) {
+        h_iter.for_each(|h| {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur < self.counters.max_value() {
                 self.counters.set(idx, cur + 1);
             }
-            cur
-        }).fold(u32::MAX, |min, cur| min.min(cur)) > 0
+        });
     }
 
     fn contains_hash_iter(&self, mut h_iter: HashIter) -> bool {
@@ -271,12 +270,12 @@ where
     /// Inserts an item, returns true if this item was already in the
     /// filter any number of times
     #[inline(always)]
-    fn insert<T: Hash>(&mut self, item: &T) -> bool {
+    fn insert<T: Hash>(&mut self, item: &T) {
         self.insert_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
     }
 
     #[inline(always)]
-    fn insert_slice(&mut self, item: &[u8]) -> bool {
+    fn insert_slice(&mut self, item: &[u8]) {
         self.insert_hash_iter(HashIter::from_slice(
             item,
             self.num_hashes,
@@ -285,7 +284,7 @@ where
     }
 
     #[inline(always)]
-    fn insert_fingerprint(&mut self, fingerprint: crate::BloomFingerprint) -> bool {
+    fn insert_fingerprint(&mut self, fingerprint: crate::BloomFingerprint) {
         self.insert_hash_iter(HashIter::from_fingerprint(fingerprint, self.num_hashes))
     }
 
@@ -326,7 +325,8 @@ mod tests {
     #[test]
     fn simple() {
         let mut cbf: CountingBloomFilter = CountingBloomFilter::with_rate(4, 0.01, 100);
-        assert_eq!(cbf.insert(&1), false);
+        assert!(!cbf.contains(&1));
+        cbf.insert(&1);
         assert!(cbf.contains(&1));
         assert!(!cbf.contains(&2));
     }

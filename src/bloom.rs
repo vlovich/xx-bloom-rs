@@ -157,20 +157,11 @@ where
         self.num_hashes
     }
 
-    fn insert_hash_iter(&mut self, h_iter: HashIter) -> bool {
-        h_iter.map(|h| {
+    fn insert_hash_iter(&mut self, h_iter: HashIter) {
+        h_iter.for_each(|h| {
             let idx: usize = (h % self.num_bits() as u64) as usize;
-            let missing = match self.bits.get(idx) {
-                Some(b) => {
-                    !b
-                }
-                None => {
-                    panic!("Hash mod failed in insert");
-                }
-            };
             self.bits.set(idx, true);
-            missing
-        }).fold(false, |res, not_existing| res || not_existing)
+        });
     }
 
     fn contains_hash_iter(&self, mut h_iter: HashIter) -> bool {
@@ -198,7 +189,7 @@ where
     ///
     /// If the BloomFilter did have this value present, `false` is returned.
     #[inline(always)]
-    fn insert<T: Hash>(&mut self, item: &T) -> bool {
+    fn insert<T: Hash>(&mut self, item: &T) {
         self.insert_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
     }
 
@@ -210,7 +201,7 @@ where
     /// 
     /// This is a faster-path if the item you're inserting is a byte slice.
     #[inline(always)]
-    fn insert_slice(&mut self, item: &[u8]) -> bool {
+    fn insert_slice(&mut self, item: &[u8]) {
         self.insert_hash_iter(HashIter::from_slice(
             item,
             self.num_hashes,
@@ -228,7 +219,7 @@ where
     /// hash algorithm that you're inserting into. This will let you amortize
     /// the cost of the hash.
     #[inline(always)]
-    fn insert_fingerprint(&mut self, fingerprint: crate::BloomFingerprint) -> bool {
+    fn insert_fingerprint(&mut self, fingerprint: crate::BloomFingerprint) {
         self.insert_hash_iter(HashIter::from_fingerprint(fingerprint, self.num_hashes))
     }
 
