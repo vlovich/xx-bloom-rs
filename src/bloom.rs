@@ -19,9 +19,10 @@ extern crate xxhash_rust;
 
 use bit_vec::BitVec;
 use std::cmp::{max, min};
-use std::hash::{BuildHasher, Hash};
+use std::hash::Hash;
 
 use crate::xxh_helper::RandomXxh3State;
+use crate::BloomBuildHasher;
 
 use super::hashing::HashIter;
 use super::{Intersectable, Unionable, ASMS};
@@ -53,64 +54,56 @@ use super::{Intersectable, Unionable, ASMS};
 /// filter.contains(&1); /* true */
 /// filter.contains(&2); /* false */
 /// ```
-pub struct BloomFilter<R = RandomXxh3State, S = RandomXxh3State> {
+pub struct BloomFilter<H = RandomXxh3State>
+where
+    H: BloomBuildHasher,
+{
     bits: BitVec,
     num_hashes: u32,
-    hash_builder_one: R,
-    hash_builder_two: S,
+    hash_builder: H,
 }
 
-impl BloomFilter<RandomXxh3State, RandomXxh3State> {
+impl BloomFilter<RandomXxh3State> {
     /// Create a new BloomFilter with the specified number of bits,
     /// and hashes
-    pub fn with_size(
-        num_bits: usize,
-        num_hashes: u32,
-    ) -> BloomFilter<RandomXxh3State, RandomXxh3State> {
+    pub fn with_size(num_bits: usize, num_hashes: u32) -> BloomFilter<RandomXxh3State> {
         BloomFilter {
             bits: BitVec::from_elem(num_bits, false),
-            num_hashes: num_hashes,
-            hash_builder_one: RandomXxh3State::new(),
-            hash_builder_two: RandomXxh3State::new(),
+            num_hashes,
+            hash_builder: RandomXxh3State::new(),
         }
     }
 
     /// create a BloomFilter that expects to hold
     /// `expected_num_items`.  The filter will be sized to have a
     /// false positive rate of the value specified in `rate`.
-    pub fn with_rate(
-        rate: f32,
-        expected_num_items: u32,
-    ) -> BloomFilter<RandomXxh3State, RandomXxh3State> {
+    pub fn with_rate(rate: f32, expected_num_items: u32) -> BloomFilter<RandomXxh3State> {
         let bits = needed_bits(rate, expected_num_items);
         BloomFilter::with_size(bits, optimal_num_hashes(bits, expected_num_items))
     }
 }
 
-impl<R, S> BloomFilter<R, S>
+impl<H> BloomFilter<H>
 where
-    R: Clone,
-    S: Clone,
+    H: BloomBuildHasher,
 {
     /// Create a new BloomFilter with the exact same parameters as the other.
     /// These two filters can be safely intersected and unioned with one another.
     /// Otherwise you have to be careful that not only the number of bits and number of hashes
     /// is the same, but also that the hash algorithms used have the same parameters (the default
     /// hash functions use random state).
-    pub fn combinable_with(other: &BloomFilter<R, S>) -> Self {
+    pub fn combinable_with(other: &BloomFilter<H>) -> Self {
         BloomFilter {
             bits: BitVec::from_elem(other.bits.len(), false),
             num_hashes: other.num_hashes,
-            hash_builder_one: other.hash_builder_one.clone(),
-            hash_builder_two: other.hash_builder_two.clone(),
+            hash_builder: other.hash_builder.clone(),
         }
     }
 }
 
-impl<R, S> BloomFilter<R, S>
+impl<H> BloomFilter<H>
 where
-    R: BuildHasher,
-    S: BuildHasher,
+    H: BloomBuildHasher,
 {
     /// Create a new BloomFilter with the specified number of bits,
     /// hashes, and the two specified HashBuilders.  Note the the
@@ -118,17 +111,15 @@ where
     /// two HashBuilders that produce the same or correlated hash
     /// values will break the false positive guarantees of the
     /// BloomFilter.
-    pub fn with_size_and_hashers(
+    pub fn with_size_and_hasher(
         num_bits: usize,
         num_hashes: u32,
-        hash_builder_one: R,
-        hash_builder_two: S,
-    ) -> BloomFilter<R, S> {
+        hash_builder: H,
+    ) -> BloomFilter<H> {
         BloomFilter {
             bits: BitVec::from_elem(num_bits, false),
-            num_hashes: num_hashes,
-            hash_builder_one: hash_builder_one,
-            hash_builder_two: hash_builder_two,
+            num_hashes,
+            hash_builder,
         }
     }
 
@@ -136,23 +127,21 @@ where
     /// `expected_num_items`.  The filter will be sized to have a
     /// false positive rate of the value specified in `rate`.  Items
     /// will be hashed using the Hashers produced by
-    /// `hash_builder_one` and `hash_builder_two`.  Note the the
+    /// `hash_builder` and `hash_builder_two`.  Note the the
     /// HashBuilders MUST provide independent hash values.  Passing
     /// two HashBuilders that produce the same or correlated hash
     /// values will break the false positive guarantees of the
     /// BloomFilter.
-    pub fn with_rate_and_hashers(
+    pub fn with_rate_and_hasher(
         rate: f32,
         expected_num_items: u32,
-        hash_builder_one: R,
-        hash_builder_two: S,
-    ) -> BloomFilter<R, S> {
+        hash_builder: H,
+    ) -> BloomFilter<H> {
         let bits = needed_bits(rate, expected_num_items);
-        BloomFilter::with_size_and_hashers(
+        BloomFilter::with_size_and_hasher(
             bits,
             optimal_num_hashes(bits, expected_num_items),
-            hash_builder_one,
-            hash_builder_two,
+            hash_builder,
         )
     }
 
@@ -165,26 +154,10 @@ where
     pub fn num_hashes(&self) -> u32 {
         self.num_hashes
     }
-}
 
-impl<R, S> ASMS for BloomFilter<R, S>
-where
-    R: BuildHasher,
-    S: BuildHasher,
-{
-    /// Insert item into this BloomFilter.
-    ///
-    /// If the BloomFilter did not have this value present, `true` is returned.
-    ///
-    /// If the BloomFilter did have this value present, `false` is returned.
-    fn insert<T: Hash>(&mut self, item: &T) -> bool {
+    fn insert_hash_iter(&mut self, h_iter: HashIter) -> bool {
         let mut contained = true;
-        for h in HashIter::from(
-            item,
-            self.num_hashes,
-            &self.hash_builder_one,
-            &self.hash_builder_two,
-        ) {
+        for h in h_iter {
             let idx = (h % self.bits.len() as u64) as usize;
             match self.bits.get(idx) {
                 Some(b) => {
@@ -201,16 +174,8 @@ where
         !contained
     }
 
-    /// Check if the item has been inserted into this bloom filter.
-    /// This function can return false positives, but not false
-    /// negatives.
-    fn contains<T: Hash>(&self, item: &T) -> bool {
-        for h in HashIter::from(
-            item,
-            self.num_hashes,
-            &self.hash_builder_one,
-            &self.hash_builder_two,
-        ) {
+    fn contains_hash_iter(&self, h_iter: HashIter) -> bool {
+        for h in h_iter {
             let idx = (h % self.bits.len() as u64) as usize;
             match self.bits.get(idx) {
                 Some(b) => {
@@ -225,14 +190,57 @@ where
         }
         true
     }
+}
+
+impl<H> ASMS for BloomFilter<H>
+where
+    H: BloomBuildHasher,
+{
+    /// Insert item into this BloomFilter.
+    ///
+    /// If the BloomFilter did not have this value present, `true` is returned.
+    ///
+    /// If the BloomFilter did have this value present, `false` is returned.
+    #[inline]
+    fn insert<T: Hash>(&mut self, item: &T) -> bool {
+        self.insert_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
+    }
+
+    /// Like `insert` but more optimized path.
+    #[inline]
+    fn insert_slice(&mut self, item: &[u8]) -> bool {
+        self.insert_hash_iter(HashIter::from_slice(
+            item,
+            self.num_hashes,
+            &self.hash_builder,
+        ))
+    }
+
+    /// Check if the item has been inserted into this bloom filter.
+    /// This function can return false positives, but not false
+    /// negatives.
+    #[inline]
+    fn contains<T: Hash>(&self, item: &T) -> bool {
+        self.contains_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
+    }
+
+    #[inline]
+    fn contains_slice(&self, item: &[u8]) -> bool {
+        self.contains_hash_iter(HashIter::from_slice(
+            item,
+            self.num_hashes,
+            &self.hash_builder,
+        ))
+    }
 
     /// Remove all values from this BloomFilter
+    #[inline]
     fn clear(&mut self) {
         self.bits.clear();
     }
 }
 
-impl<R, S> Intersectable for BloomFilter<R, S> {
+impl Intersectable for BloomFilter {
     /// Calculates the intersection of two BloomFilters.  Only items inserted into both filters will still be present in `self`.
     ///
     /// Both BloomFilters must be using the same number of
@@ -240,12 +248,12 @@ impl<R, S> Intersectable for BloomFilter<R, S> {
     ///
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
-    fn intersect(&mut self, other: &BloomFilter<R, S>) -> bool {
+    fn intersect(&mut self, other: &BloomFilter) -> bool {
         self.bits.and(&other.bits)
     }
 }
 
-impl<R, S> Unionable for BloomFilter<R, S> {
+impl Unionable for BloomFilter {
     /// Calculates the union of two BloomFilters.  Items inserted into
     /// either filters will be present in `self`.
     ///
@@ -254,7 +262,7 @@ impl<R, S> Unionable for BloomFilter<R, S> {
     ///
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
-    fn union(&mut self, other: &BloomFilter<R, S>) -> bool {
+    fn union(&mut self, other: &BloomFilter) -> bool {
         self.bits.or(&other.bits)
     }
 }
@@ -284,7 +292,7 @@ mod tests {
 
     use super::{needed_bits, optimal_num_hashes, BloomFilter};
     use crate::{Intersectable, Unionable, ASMS};
-    use std::collections::{hash_map::RandomState, HashSet};
+    use std::collections::HashSet;
 
     #[test]
     fn simple() {
@@ -298,10 +306,7 @@ mod tests {
 
     #[test]
     fn intersect() {
-        let h1 = RandomState::new();
-        let h2 = RandomState::new();
-        let mut b1 =
-            BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
+        let mut b1 = BloomFilter::with_rate(0.01, 20);
         b1.insert(&1);
         b1.insert(&2);
         let mut b2 = BloomFilter::combinable_with(&b1);
@@ -315,10 +320,7 @@ mod tests {
 
     #[test]
     fn union() {
-        let h1 = RandomState::new();
-        let h2 = RandomState::new();
-        let mut b1 =
-            BloomFilter::with_rate_and_hashers(0.01, 20, h1.clone(), h2.clone());
+        let mut b1 = BloomFilter::with_rate(0.01, 20);
         b1.insert(&1);
         let mut b2 = BloomFilter::combinable_with(&b1);
         b2.insert(&2);

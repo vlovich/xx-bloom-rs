@@ -1,8 +1,8 @@
 use std::collections::hash_map::RandomState;
 
-use bloom::{BloomFilter, ASMS};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rand::Rng;
+use xx_bloom::{BloomFilter, BuildHasher128Adapter, ASMS};
 
 // Since no way to get this value cross-platform, manually set it to larger than reasonable.
 // Most tests just reuse the same slice over and over again, but that's not representative of
@@ -34,30 +34,31 @@ fn benchmark(c: &mut Criterion) {
                 &num_keys,
                 |b, _| {
                     let mut offset = 0;
-                    let mut filter = BloomFilter::with_rate_and_hashers(0.01, num_keys + 300_000, RandomState::new(), RandomState::new());
+                    let mut filter = BloomFilter::with_rate_and_hasher(
+                        0.01,
+                        num_keys + 300_000,
+                        BuildHasher128Adapter::with_hashers(RandomState::new(), RandomState::new()),
+                    );
                     b.iter(|| {
                         let key = get_random_key(&key_buffer, &mut offset, key_size);
                         filter.insert(&key);
                     })
                 },
             );
-            group.bench_with_input(
-                BenchmarkId::new("xxh3", key_size),
-                &num_keys,
-                |b, _| {
-                    let mut offset = 0;
-                    let mut filter = BloomFilter::with_rate(0.01, num_keys + 300_000);
-                    b.iter(|| {
-                        let key = get_random_key(&key_buffer, &mut offset, key_size);
-                        filter.insert(&key);
-                    })
-                },
-            );
+            group.bench_with_input(BenchmarkId::new("xxh3", key_size), &num_keys, |b, _| {
+                let mut offset = 0;
+                let mut filter = BloomFilter::with_rate(0.01, num_keys + 300_000);
+                b.iter(|| {
+                    let key = get_random_key(&key_buffer, &mut offset, key_size);
+                    filter.insert_slice(&key);
+                })
+            });
         }
     }
 
     {
-        let mut group: criterion::BenchmarkGroup<'_, criterion::measurement::WallTime> = c.benchmark_group("Contains");
+        let mut group: criterion::BenchmarkGroup<'_, criterion::measurement::WallTime> =
+            c.benchmark_group("Contains");
         let num_keys = 1_000_000;
         for key_size in [5, 7, 17, 31, 47, 97, 127, 257, 521] {
             group.throughput(criterion::Throughput::Bytes(key_size.try_into().unwrap()));
@@ -66,25 +67,25 @@ fn benchmark(c: &mut Criterion) {
                 &num_keys,
                 |b, _| {
                     let mut offset = 0;
-                    let mut filter = BloomFilter::with_rate_and_hashers(0.01, num_keys + 300_000, RandomState::new(), RandomState::new());
+                    let mut filter = BloomFilter::with_rate_and_hasher(
+                        0.01,
+                        num_keys + 300_000,
+                        BuildHasher128Adapter::with_hashers(RandomState::new(), RandomState::new()),
+                    );
                     b.iter(|| {
                         let key = get_random_key(&key_buffer, &mut offset, key_size);
                         filter.contains(&key);
                     })
                 },
             );
-            group.bench_with_input(
-                BenchmarkId::new("xxh3", key_size),
-                &num_keys,
-                |b, _| {
-                    let mut offset = 0;
-                    let mut filter = BloomFilter::with_rate(0.01, num_keys + 300_000);
-                    b.iter(|| {
-                        let key = get_random_key(&key_buffer, &mut offset, key_size);
-                        filter.contains(&key);
-                    })
-                },
-            );
+            group.bench_with_input(BenchmarkId::new("xxh3", key_size), &num_keys, |b, _| {
+                let mut offset = 0;
+                let mut filter = BloomFilter::with_rate(0.01, num_keys + 300_000);
+                b.iter(|| {
+                    let key = get_random_key(&key_buffer, &mut offset, key_size);
+                    filter.contains_slice(&key);
+                })
+            });
         }
     }
 }

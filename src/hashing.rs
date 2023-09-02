@@ -1,4 +1,6 @@
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash::Hash;
+
+use crate::{BloomBuildHasher, BloomHasher};
 // utilities for hashing
 
 pub struct HashIter {
@@ -29,18 +31,22 @@ impl Iterator for HashIter {
 }
 
 impl HashIter {
-    pub fn from<T: Hash, R: BuildHasher, S: BuildHasher>(
-        item: T,
-        count: u32,
-        build_hasher_one: &R,
-        build_hasher_two: &S,
-    ) -> HashIter {
-        let mut hasher_one = build_hasher_one.build_hasher();
-        let mut hasher_two = build_hasher_two.build_hasher();
-        item.hash(&mut hasher_one);
-        item.hash(&mut hasher_two);
-        let h1 = hasher_one.finish();
-        let h2 = hasher_two.finish();
+    #[inline(always)]
+    pub fn from<T: Hash, H: BloomBuildHasher>(item: T, count: u32, build_hasher: &H) -> HashIter {
+        let mut hasher = build_hasher.build_hasher();
+        item.hash(&mut hasher);
+        let (h1, h2) = hasher.finish_128();
+        HashIter {
+            h1: h1,
+            h2: h2,
+            i: 0,
+            count: count,
+        }
+    }
+
+    #[inline(always)]
+    pub fn from_slice<H: BloomBuildHasher>(item: &[u8], count: u32, build_hasher: &H) -> HashIter {
+        let (h1, h2) = build_hasher.hash_one_128(item);
         HashIter {
             h1: h1,
             h2: h2,

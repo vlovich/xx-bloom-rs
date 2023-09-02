@@ -1,34 +1,34 @@
+use crate::xxh_helper::RandomXxh3State;
+use crate::BloomBuildHasher;
+
 use super::hashing::HashIter;
 use super::ValueVec;
 use super::ASMS;
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hash};
+use std::hash::Hash;
 
 /// A standard counting bloom filter that uses a fixed number of bits
 /// per counter, supports remove, and estimating the count of the
 /// number of items inserted.
-pub struct CountingBloomFilter<R = RandomState, S = RandomState> {
+pub struct CountingBloomFilter<H = RandomXxh3State> {
     counters: ValueVec,
     num_entries: u64,
     num_hashes: u32,
-    hash_builder_one: R,
-    hash_builder_two: S,
+    hash_builder: H,
 }
 
-impl CountingBloomFilter<RandomState, RandomState> {
+impl CountingBloomFilter<RandomXxh3State> {
     /// Create a new CountingBloomFilter that will hold `num_entries`
     /// items, uses `bits_per_entry` per item, and `num_hashes` hashes
     pub fn with_size(
         num_entries: usize,
         bits_per_entry: usize,
         num_hashes: u32,
-    ) -> CountingBloomFilter<RandomState, RandomState> {
+    ) -> CountingBloomFilter<RandomXxh3State> {
         CountingBloomFilter {
             counters: ValueVec::new(bits_per_entry, num_entries),
             num_entries: num_entries as u64,
             num_hashes: num_hashes,
-            hash_builder_one: RandomState::new(),
-            hash_builder_two: RandomState::new(),
+            hash_builder: RandomXxh3State::new(),
         }
     }
 
@@ -40,7 +40,7 @@ impl CountingBloomFilter<RandomState, RandomState> {
         bits_per_entry: usize,
         rate: f32,
         expected_num_items: u32,
-    ) -> CountingBloomFilter<RandomState, RandomState> {
+    ) -> CountingBloomFilter<RandomXxh3State> {
         let entries = super::bloom::needed_bits(rate, expected_num_items);
         CountingBloomFilter::with_size(
             entries,
@@ -73,10 +73,9 @@ impl CountingBloomFilter<RandomState, RandomState> {
     }
 }
 
-impl<R, S> CountingBloomFilter<R, S>
+impl<H> CountingBloomFilter<H>
 where
-    R: BuildHasher,
-    S: BuildHasher,
+    H: BloomBuildHasher,
 {
     /// Create a new CountingBloomFilter with the specified number of
     /// bits, hashes, and the two specified HashBuilders.  Note the
@@ -84,45 +83,41 @@ where
     /// Passing two HashBuilders that produce the same or correlated
     /// hash values will break the false positive guarantees of the
     /// CountingBloomFilter.
-    pub fn with_size_and_hashers(
+    pub fn with_size_and_hasher(
         num_entries: usize,
         bits_per_entry: usize,
         num_hashes: u32,
-        hash_builder_one: R,
-        hash_builder_two: S,
-    ) -> CountingBloomFilter<R, S> {
+        hash_builder: H,
+    ) -> CountingBloomFilter<H> {
         CountingBloomFilter {
             counters: ValueVec::new(bits_per_entry, num_entries),
             num_entries: num_entries as u64,
-            num_hashes: num_hashes,
-            hash_builder_one: hash_builder_one,
-            hash_builder_two: hash_builder_two,
+            num_hashes,
+            hash_builder,
         }
     }
 
     /// Create a CountingBloomFilter that expects to hold
     /// `expected_num_items`.  The filter will be sized to have a
     /// false positive rate of the value specified in `rate`.  Items
-    /// will be hashed using the Hashers produced by
-    /// `hash_builder_one` and `hash_builder_two`.  Note the the
+    /// will be hashed using the Hasher produced by
+    /// `hash_builder`.  Note the the
     /// HashBuilders MUST provide independent hash values.  Passing
     /// two HashBuilders that produce the same or correlated hash
     /// values will break the false positive guarantees of the
     /// CountingBloomFilter.
-    pub fn with_rate_and_hashers(
+    pub fn with_rate_and_hasher(
         bits_per_entry: usize,
         rate: f32,
         expected_num_items: u32,
-        hash_builder_one: R,
-        hash_builder_two: S,
-    ) -> CountingBloomFilter<R, S> {
+        hash_builder: H,
+    ) -> CountingBloomFilter<H> {
         let entries = super::bloom::needed_bits(rate, expected_num_items);
-        CountingBloomFilter::with_size_and_hashers(
+        CountingBloomFilter::with_size_and_hasher(
             entries,
             bits_per_entry,
             super::bloom::optimal_num_hashes(entries, expected_num_items),
-            hash_builder_one,
-            hash_builder_two,
+            hash_builder,
         )
     }
 
@@ -130,16 +125,11 @@ where
     /// this item had been inserted previously (i.e. the count before
     /// this remove).  Returns 0 if item was never inserted.
     pub fn remove<T: Hash>(&mut self, item: &T) -> u32 {
-        if !(self as &CountingBloomFilter<R, S>).contains(item) {
+        if !(self as &CountingBloomFilter<H>).contains(item) {
             return 0;
         }
         let mut min = u32::max_value();
-        for h in HashIter::from(
-            item,
-            self.num_hashes,
-            &self.hash_builder_one,
-            &self.hash_builder_two,
-        ) {
+        for h in HashIter::from(item, self.num_hashes, &self.hash_builder) {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur < min {
@@ -160,12 +150,7 @@ where
     /// times, but possibly fewer.
     pub fn estimate_count<T: Hash>(&self, item: &T) -> u32 {
         let mut min = u32::max_value();
-        for h in HashIter::from(
-            item,
-            self.num_hashes,
-            &self.hash_builder_one,
-            &self.hash_builder_two,
-        ) {
+        for h in HashIter::from(item, self.num_hashes, &self.hash_builder) {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur < min {
@@ -180,12 +165,7 @@ where
     /// this insertion)
     pub fn insert_get_count<T: Hash>(&mut self, item: &T) -> u32 {
         let mut min = u32::max_value();
-        for h in HashIter::from(
-            item,
-            self.num_hashes,
-            &self.hash_builder_one,
-            &self.hash_builder_two,
-        ) {
+        for h in HashIter::from(item, self.num_hashes, &self.hash_builder) {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur < min {
@@ -197,23 +177,10 @@ where
         }
         min
     }
-}
 
-impl<R, S> ASMS for CountingBloomFilter<R, S>
-where
-    R: BuildHasher,
-    S: BuildHasher,
-{
-    /// Inserts an item, returns true if this item was already in the
-    /// filter any number of times
-    fn insert<T: Hash>(&mut self, item: &T) -> bool {
+    fn insert_hash_iter(&mut self, h_iter: HashIter) -> bool {
         let mut min = u32::max_value();
-        for h in HashIter::from(
-            item,
-            self.num_hashes,
-            &self.hash_builder_one,
-            &self.hash_builder_two,
-        ) {
+        for h in h_iter {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur < min {
@@ -226,16 +193,8 @@ where
         min > 0
     }
 
-    /// Check if the item has been inserted into this
-    /// CountingBloomFilter.  This function can return false
-    /// positives, but not false negatives.
-    fn contains<T: Hash>(&self, item: &T) -> bool {
-        for h in HashIter::from(
-            item,
-            self.num_hashes,
-            &self.hash_builder_one,
-            &self.hash_builder_two,
-        ) {
+    fn contains_hash_iter(&self, h_iter: HashIter) -> bool {
+        for h in h_iter {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
             if cur == 0 {
@@ -243,6 +202,44 @@ where
             }
         }
         true
+    }
+}
+
+impl<H> ASMS for CountingBloomFilter<H>
+where
+    H: BloomBuildHasher,
+{
+    /// Inserts an item, returns true if this item was already in the
+    /// filter any number of times
+    #[inline(always)]
+    fn insert<T: Hash>(&mut self, item: &T) -> bool {
+        self.insert_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
+    }
+
+    #[inline(always)]
+    fn insert_slice(&mut self, item: &[u8]) -> bool {
+        self.insert_hash_iter(HashIter::from_slice(
+            item,
+            self.num_hashes,
+            &self.hash_builder,
+        ))
+    }
+
+    /// Check if the item has been inserted into this
+    /// CountingBloomFilter.  This function can return false
+    /// positives, but not false negatives.
+    #[inline(always)]
+    fn contains<T: Hash>(&self, item: &T) -> bool {
+        self.contains_hash_iter(HashIter::from(item, self.num_hashes, &self.hash_builder))
+    }
+
+    fn contains_slice(&self, item: &[u8]) -> bool {
+        // TODO: optimize
+        self.contains_hash_iter(HashIter::from_slice(
+            item,
+            self.num_hashes,
+            &self.hash_builder,
+        ))
     }
 
     /// Remove all values from this CountingBloomFilter
