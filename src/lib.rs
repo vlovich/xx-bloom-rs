@@ -177,7 +177,7 @@ pub trait ASMS {
 /// same size, but will simply produce incorrect (meaningless) results
 /// if the filters are using different hash functions.
 pub trait Intersectable {
-    fn intersect(&mut self, other: &Self) -> bool;
+    fn intersect(&mut self, other: &Self);
 }
 
 /// Filters that implement this trait can be unioned with filters
@@ -189,7 +189,7 @@ pub trait Intersectable {
 /// same size, but will simply produce incorrect (meaningless) results
 /// if the filters are using different hash functions.
 pub trait Unionable {
-    fn union(&mut self, other: &Self) -> bool;
+    fn union(&mut self, other: &Self);
 }
 
 /// Filters than are Combineable can be unioned and intersected

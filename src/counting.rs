@@ -126,20 +126,16 @@ where
         if !(self as &CountingBloomFilter<H>).contains_hash_iter(h_iter) {
             return 0;
         }
-        let mut min = u32::max_value();
-        for h in h_iter {
+        h_iter.map(|h| {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
-            if cur < min {
-                min = cur;
-            }
             if cur > 0 {
                 self.counters.set(idx, cur - 1);
             } else {
                 panic!("Contains returned true but a counter is 0");
             }
-        }
-        min
+            cur
+        }).fold(u32::max_value(), |min, cur| min.min(cur))
     }
     /// Remove an item.  Returns an upper bound of the number of times
     /// this item had been inserted previously (i.e. the count before
@@ -174,15 +170,10 @@ where
     }
 
     fn estimate_count_hash_iter(&self, h_iter: HashIter) -> u32 {
-        let mut min = u32::max_value();
-        for h in h_iter {
+        h_iter.map(|h| {
             let idx = (h % self.num_entries) as usize;
-            let cur = self.counters.get(idx);
-            if cur < min {
-                min = cur;
-            }
-        }
-        min
+            self.counters.get(idx)
+        }).fold(u32::max_value(), |min, cur| min.min(cur))
     }
 
     /// Return an estimate of the number of times `item` has been
@@ -216,18 +207,14 @@ where
     }
 
     fn insert_get_count_hash_iter(&mut self, h_iter: HashIter) -> u32 {
-        let mut min = u32::max_value();
-        for h in h_iter {
+        h_iter.map(|h| {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
-            if cur < min {
-                min = cur;
-            }
             if cur < self.counters.max_value() {
                 self.counters.set(idx, cur + 1);
             }
-        }
-        min
+            cur
+        }).fold(u32::MAX, |min, cur| min.min(cur))
     }
 
     /// Inserts an item, returns the estimated count of the number of
@@ -258,29 +245,22 @@ where
     }
 
     fn insert_hash_iter(&mut self, h_iter: HashIter) -> bool {
-        let mut min = u32::max_value();
-        for h in h_iter {
+        h_iter.map(|h| {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
-            if cur < min {
-                min = cur;
-            }
             if cur < self.counters.max_value() {
                 self.counters.set(idx, cur + 1);
             }
-        }
-        min > 0
+            cur
+        }).fold(u32::MAX, |min, cur| min.min(cur)) > 0
     }
 
-    fn contains_hash_iter(&self, h_iter: HashIter) -> bool {
-        for h in h_iter {
+    fn contains_hash_iter(&self, mut h_iter: HashIter) -> bool {
+        h_iter.all(|h| {
             let idx = (h % self.num_entries) as usize;
             let cur = self.counters.get(idx);
-            if cur == 0 {
-                return false;
-            }
-        }
-        true
+            cur != 0
+        })
     }
 }
 

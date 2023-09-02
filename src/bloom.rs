@@ -94,7 +94,7 @@ where
     /// hash functions use random state).
     pub fn combinable_with(other: &BloomFilter<H>) -> Self {
         BloomFilter {
-            bits: BitVec::from_elem(other.bits.len(), false),
+            bits: BitVec::from_elem(other.num_bits(), false),
             num_hashes: other.num_hashes,
             hash_builder: other.hash_builder.clone(),
         }
@@ -146,49 +146,45 @@ where
     }
 
     /// Get the number of bits this BloomFilter is using
+    #[inline(always)]
     pub fn num_bits(&self) -> usize {
         self.bits.len()
     }
 
     /// Get the number of hash functions this BloomFilter is using
+    #[inline(always)]
     pub fn num_hashes(&self) -> u32 {
         self.num_hashes
     }
 
     fn insert_hash_iter(&mut self, h_iter: HashIter) -> bool {
-        let mut contained = true;
-        for h in h_iter {
-            let idx = (h % self.bits.len() as u64) as usize;
-            match self.bits.get(idx) {
+        h_iter.map(|h| {
+            let idx: usize = (h % self.num_bits() as u64) as usize;
+            let missing = match self.bits.get(idx) {
                 Some(b) => {
-                    if !b {
-                        contained = false;
-                    }
+                    !b
                 }
                 None => {
                     panic!("Hash mod failed in insert");
                 }
-            }
-            self.bits.set(idx, true)
-        }
-        !contained
+            };
+            self.bits.set(idx, true);
+            missing
+        }).fold(false, |res, not_existing| res || not_existing)
     }
 
-    fn contains_hash_iter(&self, h_iter: HashIter) -> bool {
-        for h in h_iter {
-            let idx = (h % self.bits.len() as u64) as usize;
+    fn contains_hash_iter(&self, mut h_iter: HashIter) -> bool {
+        h_iter.all(|h| {
+            let idx: usize = (h % self.num_bits() as u64) as usize;
             match self.bits.get(idx) {
                 Some(b) => {
-                    if !b {
-                        return false;
-                    }
+                    b
                 }
                 None => {
                     panic!("Hash mod failed");
                 }
             }
-        }
-        true
+        })
     }
 }
 
@@ -283,8 +279,8 @@ impl Intersectable for BloomFilter {
     ///
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
-    fn intersect(&mut self, other: &BloomFilter) -> bool {
-        self.bits.and(&other.bits)
+    fn intersect(&mut self, other: &BloomFilter) {
+        self.bits.and(&other.bits);
     }
 }
 
@@ -297,8 +293,8 @@ impl Unionable for BloomFilter {
     ///
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
-    fn union(&mut self, other: &BloomFilter) -> bool {
-        self.bits.or(&other.bits)
+    fn union(&mut self, other: &BloomFilter) {
+        self.bits.or(&other.bits);
     }
 }
 
