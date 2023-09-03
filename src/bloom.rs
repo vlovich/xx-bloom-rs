@@ -262,7 +262,7 @@ where
     }
 }
 
-impl Intersectable for BloomFilter {
+impl<H> Intersectable for BloomFilter<H> where H: BloomBuildHasher {
     /// Calculates the intersection of two BloomFilters.  Only items inserted into both filters will still be present in `self`.
     ///
     /// Both BloomFilters must be using the same number of
@@ -270,12 +270,12 @@ impl Intersectable for BloomFilter {
     ///
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
-    fn intersect(&mut self, other: &BloomFilter) {
+    fn intersect(&mut self, other: &BloomFilter<H>) {
         self.bits.and(&other.bits);
     }
 }
 
-impl Unionable for BloomFilter {
+impl<H> Unionable for BloomFilter<H> where H: BloomBuildHasher {
     /// Calculates the union of two BloomFilters.  Items inserted into
     /// either filters will be present in `self`.
     ///
@@ -284,7 +284,7 @@ impl Unionable for BloomFilter {
     ///
     /// # Panics
     /// Panics if the BloomFilters are not using the same number of bits
-    fn union(&mut self, other: &BloomFilter) {
+    fn union(&mut self, other: &BloomFilter<H>) {
         self.bits.or(&other.bits);
     }
 }
