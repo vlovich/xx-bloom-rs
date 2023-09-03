@@ -119,6 +119,7 @@ pub mod valuevec;
 pub use crate::valuevec::ValueVec;
 pub use std_hasher::*;
 pub use xxh_helper::*;
+pub const XXH3_SECRET_SIZE: usize = xxh_helper::DEFAULT_SECRET_SIZE;
 
 /// This is an opaque container of the raw underlying information for a key.
 /// If you have a bunch of filters with the exact BloomBuildHasher being used,

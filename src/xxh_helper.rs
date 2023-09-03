@@ -4,7 +4,7 @@ use xxhash_rust::xxh3::{Xxh3, Xxh3Builder};
 
 use crate::{BloomBuildHasher, BloomFingerprint, BloomHasher};
 
-const DEFAULT_SECRET_SIZE: usize = 192;
+pub(crate) const DEFAULT_SECRET_SIZE: usize = 192;
 
 impl BloomHasher for Xxh3 {
     fn finish_128(&self) -> BloomFingerprint {
