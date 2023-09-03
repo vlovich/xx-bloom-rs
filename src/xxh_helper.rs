@@ -83,12 +83,12 @@ pub struct SecretBasedXxh3Builder {
 
 impl SecretBasedXxh3Builder {
     #[inline(always)]
-    pub fn with_secret(secret: [u8; DEFAULT_SECRET_SIZE]) -> Self {
+    pub const fn with_secret(secret: [u8; DEFAULT_SECRET_SIZE]) -> Self {
         Self { secret }
     }
 
     #[inline(always)]
-    pub fn build(&self) -> Xxh3 {
+    pub const fn build(&self) -> Xxh3 {
         Xxh3::with_secret(self.secret)
     }
 }
