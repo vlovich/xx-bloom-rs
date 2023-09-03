@@ -52,6 +52,11 @@ impl RandomXxh3State {
     pub const fn build(self) -> Xxh3 {
         Xxh3Builder::new().with_secret(self.secret).build()
     }
+
+    #[inline(always)]
+    pub const fn secret(&self) -> &[u8] {
+        &self.secret
+    }
 }
 
 impl Default for RandomXxh3State {
